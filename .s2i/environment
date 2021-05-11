@@ -1,1 +1,2 @@
-ARTIFACT_COPY_ARGS=-p -r quarkus-app/quarkus-run.jar
+S2I_SOURCE_DEPLOYMENTS_FILTER=quarkus-run.jar
+MAVEN_S2I_ARTIFACT_DIRS=quarkus-app/
