@@ -3,19 +3,12 @@ package com.redhat.atomic.fruit;
 import java.util.List;
 
 import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
-import javax.persistence.SequenceGenerator;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
 
 @Entity
-public class Fruit extends PanacheEntityBase {
-    @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "FruitSequence")
-    @SequenceGenerator(name = "FruitSequence", sequenceName = "FRUIT_SEQ")
-    public Integer id;
+public class Fruit extends PanacheEntity {
+
     public String name;
     public String season;
 

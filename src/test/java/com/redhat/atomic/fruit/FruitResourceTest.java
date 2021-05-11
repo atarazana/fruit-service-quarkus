@@ -15,7 +15,7 @@ public class FruitResourceTest {
           .when().get("/fruit/hello")
           .then()
              .statusCode(200)
-             .body(is("hello"));
+             .body(is("Hello RESTEasy"));
     }
 
 }

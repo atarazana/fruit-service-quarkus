@@ -19,7 +19,7 @@ import javax.ws.rs.core.UriBuilder;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-@Path("/api/fruits")
+@Path("/fruit")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class FruitResource {
@@ -54,7 +54,7 @@ public class FruitResource {
         // persist is available by default
         fruit.persist();
         final URI createdUri = UriBuilder.fromResource(FruitResource.class)
-                        .path(Integer.toString(fruit.id))
+                        .path(Long.toString(fruit.id))
                         .build();
         return Response.created(createdUri).build();
     }
@@ -62,7 +62,7 @@ public class FruitResource {
     @PUT
     @Path("{id}")
     @Transactional
-    public Response updateFruit(@PathParam("id") Integer id, Fruit fruit) {
+    public Response updateFruit(@PathParam("id") Long id, Fruit fruit) {
         logger.info(String.format("id: %s fruit: %s", id, fruit));
 
         // since the FruitEntity is a panache entity
@@ -78,7 +78,7 @@ public class FruitResource {
         }
         
         final URI createdUri = UriBuilder.fromResource(FruitResource.class)
-                        .path(Integer.toString(id))
+                        .path(Long.toString(id))
                         .build();
         return Response.created(createdUri).build();
     }
@@ -86,7 +86,7 @@ public class FruitResource {
     @DELETE
     @Path("{id}")
     @Transactional
-    public void deleteFruit(@PathParam("id") Integer id) {
+    public void deleteFruit(@PathParam("id") Long id) {
         // since the FruitEntity is a panache entity
         // persist is available by default
         Fruit.deleteById(id);
