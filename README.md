@@ -930,6 +930,12 @@ cat <<EOF > ./src/main/resources/templates/index.html
 EOF
 ```
 
+Additionally we have to rename or delete the default html that comes with each quarkus project, otherwise you'll get that one instead of our template.
+
+```sh
+mv ./src/main/resources/META-INF/resources/index.html ./src/main/resources/META-INF/resources/index.html.old
+```
+
 Let's give it a try, shall we? As usual run in `dev` mode and then open a browser and go to [http://localhost:8080](http://localhost:8080).
 
 
