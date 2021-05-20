@@ -21,8 +21,8 @@ metadata:
 stringData:
   DB_USER: luke
   DB_PASSWORD: secret
-  DB_NAME: FRUITSDB
-  DB_HOST: postgresql-db
+  DB_NAME: my_data
+  DB_HOST: my-database
 ---
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
