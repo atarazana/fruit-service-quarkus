@@ -277,14 +277,14 @@ Using `oc`
 
 ```sh
 oc new-project ${PROJECT_NAME}
-oc new-app -e POSTGRESQL_USER=luke -e POSTGRESQL_PASSWORD=secret -e POSTGRESQL_DATABASE=my_data centos/postgresql-10-centos7 --name=my-database -n ${PROJECT_NAME}
+oc new-app -e POSTGRESQL_USER=luke -e POSTGRESQL_PASSWORD=secret -e POSTGRESQL_DATABASE=FRUITSDB centos/postgresql-10-centos7 --name=postgresql-db -n ${PROJECT_NAME}
 ```
 
 Some labeling specially useful for OpenShift developer view.
 
 ```sh
-oc label deployment/my-database app.openshift.io/runtime=postgresql --overwrite -n ${PROJECT_NAME} && \
-oc label deployment/my-database app.kubernetes.io/part-of=${APP_NAME} --overwrite -n ${PROJECT_NAME}
+oc label deployment/postgresql-db app.openshift.io/runtime=postgresql --overwrite -n ${PROJECT_NAME} && \
+oc label deployment/postgresql-db app.kubernetes.io/part-of=${APP_NAME} --overwrite -n ${PROJECT_NAME}
 ```
 
 ## Adding DB related extensions
@@ -475,7 +475,7 @@ Add the following properties to your `./src/main/resources/application.propertie
 ```properties
 #################################
 ## BEGIN: Data Base related properties
-quarkus.datasource.jdbc.url = jdbc:postgresql://my-database.%USER%-fruit-service:5432/my_data
+quarkus.datasource.jdbc.url = jdbc:postgresql://postgresql-db.%USER%-fruit-service:5432/FRUITSDB
 quarkus.datasource.db-kind = postgresql
 
 quarkus.datasource.username = luke
@@ -517,7 +517,7 @@ In a different terminal...
 > **NOTE 2:** If using `oc` you may want to set the default project to ${PROJECT_NAME}: `oc project ${PROJECT_NAME}`
 
 ```sh
-oc port-forward svc/my-database 5432:5432 -n ${PROJECT_NAME} 
+oc port-forward svc/postgresql-db 5432:5432 -n ${PROJECT_NAME} 
 ```
 
 In your current terminal run your code using profile `dev`
@@ -574,7 +574,7 @@ Second, substitute the datasource related properties in `application.properties`
 ```properties
 #################################
 ## BEGIN: Data Base related properties
-%prod.quarkus.datasource.jdbc.url = jdbc:postgresql://my-database:5432/my_data
+%prod.quarkus.datasource.jdbc.url = jdbc:postgresql://postgresql-db:5432/FRUITSDB
 %prod.quarkus.datasource.db-kind = postgresql
 %prod.quarkus.datasource.username = luke
 %prod.quarkus.datasource.password = secret
@@ -988,7 +988,7 @@ Let's add a custom annotation:
 
 ```properties
 # Custom annotations
-quarkus.openshift.annotations."app.openshift.io/connects-to"=my-database
+quarkus.openshift.annotations."app.openshift.io/connects-to"=postgresql-db
 quarkus.openshift.annotations.foo=bar
 quarkus.openshift.annotations."app.quarkus/id"=42
 ```
@@ -1008,8 +1008,8 @@ metadata:
 stringData:
   DB_USER: luke
   DB_PASSWORD: secret
-  DB_NAME: my_data
-  DB_HOST: my-database
+  DB_NAME: FRUITSDB
+  DB_HOST: postgresql-db
 EOF
 ```
 
@@ -1118,7 +1118,7 @@ quarkus.container-image.tag=1.0-SNAPSHOT
 quarkus.knative.name=atomic-fruit-service-kn
 quarkus.knative.version=1.0
 quarkus.knative.part-of=fruits-app
-quarkus.knative.annotations."app.openshift.io/connects-to"=my-database
+quarkus.knative.annotations."app.openshift.io/connects-to"=postgresql-db
 quarkus.knative.labels."app.openshift.io/runtime"=quarkus
 quarkus.knative.env.secrets = fruits-database-secret
 ## END: Knative related properties
