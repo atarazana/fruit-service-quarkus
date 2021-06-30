@@ -1,4 +1,7 @@
 *
+!pom.xml
+!oci/settings.xml
+!src/*
 !target/*-runner
 !target/*-runner.jar
 !target/lib/*
