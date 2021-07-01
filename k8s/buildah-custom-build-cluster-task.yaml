@@ -15,7 +15,7 @@ spec:
     This task clones a Git repository and builds and pushes a container
     image using a Dockerfile.
   params:
-    - default: ./oci/Dockerfile.native-full
+    - default: ./Dockerfile
       description: The location of the dockerfile relative to PATH_CONTEXT
       name: DOCKERFILE_PATH
       type: string
@@ -63,6 +63,33 @@ spec:
         - mountPath: /env-params
           name: envparams
       workingDir: /env-params
+    - args:
+        - |-
+          echo "------------------------------"
+          buildah pull '--storage-driver=vfs' '--tls-verify=$(params.TLSVERIFY)' $(params.IMAGE)
+          if [ $? -eq 0 ]; then
+            echo "Image $(params.IMAGE) found"
+          else
+            echo "Image $(params.IMAGE) not found"
+          fi
+          echo "------------------------------"
+      command:
+        - /bin/sh
+        - '-c'
+      # command:
+      #   - buildah
+      #   - pull
+      #   - '--storage-driver=vfs'
+      #   - '--tls-verify=$(params.TLSVERIFY)'
+      #   - '--layers'
+      #   - $(params.IMAGE)
+      image: $(params.BUILDER_IMAGE)
+      name: cache
+      resources: {}
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+      workingDir: $(workspaces.source.path)
     - command:
         - buildah
         - bud
@@ -105,8 +132,6 @@ spec:
   volumes:
     - emptyDir: {}
       name: varlibcontainers
-    - emptyDir: {}
-      name: gen-source
     - emptyDir: {}
       name: envparams
   workspaces:
