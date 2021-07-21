@@ -4,7 +4,7 @@ metadata:
 projects:
   - name: quarkus-zero-to-serverless-guide
     source:
-      location: 'https://github.com/atarazana/quarkus-zero-to-serverless-guide.git'
+      location: 'https://github.com/atarazana/fruit-service-quarkus.git'
       type: github
 components:
   - id: redhat/quarkus-java11/latest
