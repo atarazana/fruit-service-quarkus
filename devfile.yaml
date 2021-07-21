@@ -2,7 +2,7 @@ apiVersion: 1.0.0
 metadata:
   generateName: fruit-service-quarkus-
 projects:
-  - name: quarkus-zero-to-serverless-guide
+  - name: fruit-service-quarkus
     source:
       location: 'https://github.com/atarazana/fruit-service-quarkus.git'
       type: github
