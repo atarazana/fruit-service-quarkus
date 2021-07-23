@@ -2,7 +2,7 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: fruit-service-native-source-plr
+  name: fruit-service-source-plr
 spec:
   accessModes:
     - ReadWriteOnce
@@ -13,7 +13,7 @@ spec:
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: fruit-service-native-cache-plr
+  name: fruit-service-cache-plr
 spec:
   accessModes:
     - ReadWriteOnce
@@ -38,16 +38,16 @@ stringData:
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
-  name: fruit-service-native-alternative-kn
+  name: fruit-service-alternative-kn
   labels:
-    app.kubernetes.io/instance: fruit-service-native-alternative-kn
+    app.kubernetes.io/instance: fruit-service-alternative-kn
     pipeline.openshift.io/runtime: quarkus
     pipeline.openshift.io/type: knative
 spec:
   params:
     - name: APP_NAME
       type: string
-      default: fruit-service-native-alternative-kn
+      default: fruit-service-alternative-kn
     - name: GIT_REPO
       type: string
       default: 'https://github.com/atarazana/fruit-service-quarkus'
@@ -56,7 +56,7 @@ spec:
       default: main
     - name: IMAGE_NAME
       type: string
-      default: image-registry.openshift-image-registry.svc:5000/<project>/fruit-service-native-alternative-kn
+      default: image-registry.openshift-image-registry.svc:5000/<project>/fruit-service-alternative-kn
     - name: PATH_CONTEXT
       type: string
       default: .
@@ -90,8 +90,6 @@ spec:
       params:
         - name: PATH_CONTEXT
           value: $(params.PATH_CONTEXT)
-        - name: NATIVE_BUILD
-          value: "true"
       runAfter:
         - fetch-repository
       taskRef:
@@ -111,7 +109,7 @@ spec:
         - name: PATH_CONTEXT
           value: $(params.PATH_CONTEXT)
         - name: DOCKERFILE_PATH
-          value: './src/main/docker/Dockerfile.native'
+          value: './src/main/docker/Dockerfile.jvm'
       runAfter:
         - package
       taskRef:
