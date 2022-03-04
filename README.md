@@ -18,45 +18,22 @@ This is a sample Fruit service generated from a maven artifact that generates al
 export PROJECT_NAME="atomic-fruit"
 export APP_NAME="fruits-app"
 
-export QUARKUS_VERSION="1.13.3.Final"
+export QUARKUS_VERSION="2.7.3.Final"
 
-export GRAALVM_VERSION="21.1.0"
-GRAALVM_HOME=$(pwd)/graalvm-ce-java11-${GRAALVM_VERSION}
-if [[ "$OSTYPE" == "darwin"* ]]; then GRAALVM_HOME=${GRAALVM_HOME}/Contents/Home ; fi
-export GRAALVM_HOME
-export PATH=${GRAALVM_HOME}/bin:$PATH
-
-if [[ "$OSTYPE" == "linux"* ]]; then GRAALVM_OSTYPE=linux ; fi
-if [[ "$OSTYPE" == "darwin"* ]]; then GRAALVM_OSTYPE=darwin ; fi
-export GRAALVM_OSTYPE
-
-export KNATIVE_CLI_VERSION="0.17.0"
-if [[ "$OSTYPE" == "linux"* ]]; then KNATIVE_OSTYPE=Linux ; fi
-if [[ "$OSTYPE" == "darwin"* ]]; then KNATIVE_OSTYPE=Darwin ; fi
-export KNATIVE_OSTYPE
-
-export TEKTON_CLI_VERSION="0.13.0"
-if [[ "$OSTYPE" == "linux"* ]]; then TEKTON_OSTYPE=Linux ; fi
-if [[ "$OSTYPE" == "darwin"* ]]; then TEKTON_OSTYPE=Darwin ; fi
-export TEKTON_OSTYPE
+export MANDREL_VERSION="22.0.0.2-Final"
 
 mkdir -p ./bin
 export PATH=$(pwd)/bin:$PATH
 ```
 
-## Download GraalVM and set GraaVM env
+## Download Mandrel
 
-Now download GraalVM for your system...
-
-```sh
-curl -OL https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-${GRAALVM_VERSION}/graalvm-ce-java11-${GRAALVM_OSTYPE}-amd64-${GRAALVM_VERSION}.tar.gz
-tar xvzf graalvm-ce-java11-${GRAALVM_OSTYPE}-amd64-${GRAALVM_VERSION}.tar.gz
 ```
-
-## Install native image for GraalVM
-
-```sh
-gu install native-image
+curl -OL https://github.com/graalvm/mandrel/releases/download/mandrel-${MANDREL_VERSION}/mandrel-java11-${GRAALVM_OSTYPE}-amd64-${MANDREL_VERSION}.tar.gz
+tar -xf mandrel-java11-${GRAALVM_OSTYPE}-amd64-${MANDREL_VERSION}.tar.gz
+export JAVA_HOME="$(pwd)/mandrel-java11-${MANDREL_VERSION}"
+export GRAALVM_HOME="${JAVA_HOME}"
+export PATH="${JAVA_HOME}/bin:${PATH}"
 ```
 
 ## Login to your Openshift cluster
@@ -73,13 +50,25 @@ oc new-project ${PROJECT_NAME}
 
 # Generate the Quarkus app scaffold using a maven archetype
 
+## Install quarkus-cli
+
+```sh
+curl -Ls https://sh.jbang.dev | bash -s - app install --fresh --force quarkus@quarkusio
+```
+
+## Generate the project scaffold
+
+```
+quarkus create com.redhat.atomic.fruit:atomic-fruit-service:1.0.0-SNAPSHOT
+```
+
+or
+
 ```sh
 mvn io.quarkus:quarkus-maven-plugin:$QUARKUS_VERSION:create \
   -DprojectGroupId="com.redhat.atomic.fruit" \
   -DprojectArtifactId="atomic-fruit-service" \
-  -DprojectVersion="1.0-SNAPSHOT" \
-  -DclassName="FruitResource" \
-  -Dpath="fruit"
+  -DprojectVersion="1.0.0-SNAPSHOT"
 ```
 
 # Testing different ways of packaging the app
@@ -94,6 +83,12 @@ cd atomic-fruit-service
 
 This mode generates a Quarkus Java jar file.
 
+```
+quarkus build
+```
+
+or 
+
 ```sh
 ./mvnw -DskipTests clean package
 ```
@@ -101,17 +96,13 @@ This mode generates a Quarkus Java jar file.
 Run the application in JVM mode.
 
 ```sh
-java -jar ./target/atomic-fruit-service-1.0-SNAPSHOT-runner.jar
-
-OR
-
 java -jar ./target/quarkus-app/quarkus-run.jar
 ```
 
 Test from another terminal or a browser, you should receive a `hello` string.
 
 ```sh
-curl http://localhost:8080/fruit
+curl http://localhost:8080/hello
 ```
 
 Ctrl+C to stop.
@@ -121,6 +112,12 @@ Ctrl+C to stop.
 This mode generates a Quarkus native binary file.
 
 > **NOTE:** This is huge... now you have a native binary file, no JVM involved.
+
+```
+quarkus build --native --no-tests
+```
+
+or
 
 ```sh
 ./mvnw -DskipTests clean package -Pnative
@@ -132,10 +129,10 @@ Run the application in native mode.
 ./target/atomic-fruit-service-1.0-SNAPSHOT-runner
 ```
 
-Test from another terminal or a browser, you should receive a `hello` string.
+Test from another terminal or a browser, you should receive a `Hello RESTEasy` string.
 
 ```sh
-curl http://localhost:8080/fruit
+curl http://localhost:8080/hello
 ```
 
 Ctrl+C to stop.
@@ -144,13 +141,7 @@ Ctrl+C to stop.
 
 This mode generates a Quarkus native binary file using a build image and builds an image with it.
 
-> **NOTE:** If you want to use Mandrel...
-> 
-> ```
-> ./mvnw package -Pnative -Dquarkus.native.container-build=true -Dquarkus.native.builder-image=quay.io/quarkus/ubi-quarkus-mandrel:{mandrel-flavor}
-> ```
-
-> **NOTE 2:**
+> **NOTE:**
 >
 > If you want/need to set the container runtime you can use `-Dquarkus.native.container-runtime=(podman/docker)`
 > 
@@ -159,21 +150,33 @@ This mode generates a Quarkus native binary file using a build image and builds 
 > ./mvnw package -DskipTests -Pnative -Dquarkus.native.container-build=true -Dquarkus.native.container-runtime=podman
 > ```
 
+```
+quarkus build --native --no-tests -Dquarkus.native.container-build=true -Dquarkus.native.container-runtime=podman
+```
+
+or 
+
 ```sh
-./mvnw package -DskipTests -Pnative -Dquarkus.native.container-build=true
-docker build -f src/main/docker/Dockerfile.native -t atomic-fruit-service:1.0-SNAPSHOT .
+./mvnw package -DskipTests -Pnative -Dquarkus.native.container-build=true -Dquarkus.native.container-runtime=podman
+```
+
+Build an image...
+
+
+```
+podman build -f src/main/docker/Dockerfile.native -t atomic-fruit-service:1.0-SNAPSHOT .
 ```
 
 Run the image created.
 
 ```sh
-docker run -i --rm -p 8080:8080 atomic-fruit-service:1.0-SNAPSHOT
+podman run -i --rm -p 8080:8080 atomic-fruit-service:1.0-SNAPSHOT
 ```
 
 Test from another terminal or a browser, you should receive a `hello` string.
 
 ```sh
-curl http://localhost:8080/fruit
+curl http://localhost:8080/hello
 ```
 
 Ctrl+C to stop.
@@ -181,8 +184,8 @@ Ctrl+C to stop.
 Push it to the image registry of your choice.
 
 ```sh
-docker tag atomic-fruit-service:1.0-SNAPSHOT quay.io/<registry_user>/atomic-fruit-service:1.0-SNAPSHOT
-docker push quay.io/<registry_user>/atomic-fruit-service:1.0-SNAPSHOT
+podman tag atomic-fruit-service:1.0-SNAPSHOT quay.io/<registry_user>/atomic-fruit-service:1.0-SNAPSHOT
+podman push quay.io/<registry_user>/atomic-fruit-service:1.0-SNAPSHOT
 ```
 
 # Running in development mode and enjoy hot reloading
@@ -193,6 +196,10 @@ We can run our app in development mode, to do so we have to do as follows:
 
 ```sh
 ./mvnw quarkus:dev
+
+or
+
+quarkus dev
 ```
 
 As we have done several times before, from a different terminal or using a browser try this url: http://localhost:8080/fruit
@@ -212,14 +219,14 @@ quarkus.log.console.level=DEBUG
 quarkus.log.category."com.redhat.atomic".level=DEBUG
 ```
 
-Update `$PROJECT_HOME/src/main/java/com/redhat/atomic/fruit/FruitResource.java` with the relevant lines bellow.
+Update `$PROJECT_HOME/src/main/java/com/redhat/atomic/fruit/GreetingResource.java` with the relevant lines bellow.
 
 ```java
 ...
 import org.jboss.logging.Logger; // logging
 
-public class FruitResource {
-  Logger logger = Logger.getLogger(FruitResource.class); // logging
+public class GreetingResource {
+  Logger logger = Logger.getLogger(GreetingResource.class); // logging
   ...
 
   @GET
@@ -247,8 +254,8 @@ Add the following to the class you want to use your custom property.
 ...
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-@Path("/fruit")
-public class FruitResource {
+@Path("/hello")
+public class GreetingResource {
 
   @ConfigProperty(name = "hello.message")
   String message;
@@ -293,6 +300,10 @@ We need some extensions to expose our database to the world: REST JSON, PostgreS
 
 ```sh
 ./mvnw quarkus:add-extension -Dextension="quarkus-resteasy-jsonb, quarkus-jdbc-postgresql, quarkus-hibernate-orm-panache"
+
+or 
+
+quarkus ext add quarkus-resteasy-jsonb quarkus-jdbc-postgresql quarkus-hibernate-orm-panache
 ```
 
 You should see something like this when you add successfully extensions to an app.
@@ -343,6 +354,9 @@ What we want to do is easy:
 * Save a Fruit if **POST** `/fruit`
 * Search fruit if a given season if **GET** `/fruit/{season}`
 
+
+Create this file here `$PROJECT_HOME/src/main/java/com/redhat/atomic/fruit/Fruit.java` with the next content.
+
 ```java
 package com.redhat.atomic.fruit;
 
@@ -370,17 +384,6 @@ import org.jboss.logging.Logger;
 @Consumes(MediaType.APPLICATION_JSON)
 public class FruitResource {
     Logger logger = Logger.getLogger(FruitResource.class);
-
-    @ConfigProperty(name = "hello.message")
-    String message;
-    
-    @GET
-    @Path("hello")
-    @Produces(MediaType.TEXT_PLAIN)
-    public String hello() {
-        logger.debug("Hello method is called with message: " + this.message); // logging & custom property
-        return message; // custom property
-    }
     
     @GET
     public List<Fruit> allFruits() {
@@ -440,32 +443,6 @@ public class FruitResource {
 }
 ```
 
-We need to adapt the test class after the changes to `FruitResource`. Update `$PROJECT_HOME/src/test/java/com/redhat/atomic/fruit/FruitResourceTest.java` with the next code.
-
-```java
-package com.redhat.atomic.fruit;
-
-import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.Test;
-
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.CoreMatchers.is;
-
-@QuarkusTest
-public class FruitResourceTest {
-
-    @Test
-    public void testHelloEndpoint() {
-        given()
-          .when().get("/fruit/hello")
-          .then()
-             .statusCode(200)
-             .body(is("Hello RESTEasy"));
-    }
-
-}
-```
-
 ## Adding datasource related properties
 
 Add the following properties to your `./src/main/resources/application.properties` file:
@@ -475,7 +452,7 @@ Add the following properties to your `./src/main/resources/application.propertie
 ```properties
 #################################
 ## BEGIN: Data Base related properties
-quarkus.datasource.jdbc.url = jdbc:postgresql://postgresql-db.%USER%-fruit-service:5432/FRUITSDB
+quarkus.datasource.jdbc.url = jdbc:postgresql://localhost:5432/FRUITSDB
 quarkus.datasource.db-kind = postgresql
 
 quarkus.datasource.username = luke
@@ -522,10 +499,6 @@ oc port-forward svc/postgresql-db 5432:5432 -n ${PROJECT_NAME}
 
 In your current terminal run your code using profile `dev`
 
-> **NOTE 1:** When you run you're app in `dev` mode `dev` profile is activated by default.
-
-> **NOTE 2:** Later we'll need to run `che`, we'll do it by adding: `-Dquarkus.profile=che`
-
 ```sh
 ./mvnw compile quarkus:dev
 ```
@@ -551,20 +524,11 @@ First let's add the extension.
 
 ```sh
 ./mvnw quarkus:add-extension -Dextension="io.quarkus:quarkus-jdbc-h2"
-[INFO] Scanning for projects...
-[INFO] 
-[INFO] ------------< com.redhat.atomic.fruit:atomic-fruit-service >------------
-[INFO] Building atomic-fruit-service 1.0-SNAPSHOT
-[INFO] --------------------------------[ jar ]---------------------------------
-[INFO] 
-[INFO] --- quarkus-maven-plugin:0.23.1:add-extension (default-cli) @ atomic-fruit-service ---
-✅ Adding dependency io.quarkus:quarkus-jdbc-h2:jar
-[INFO] ------------------------------------------------------------------------
-[INFO] BUILD SUCCESS
-[INFO] ------------------------------------------------------------------------
-[INFO] Total time:  1.606 s
-[INFO] Finished at: 2019-10-13T15:37:52+02:00
-[INFO] ------------------------------------------------------------------------
+
+or
+
+quarkus ext add io.quarkus:quarkus-jdbc-h2
+
 ```
 
 Second, substitute the datasource related properties in `application.properties`
@@ -605,6 +569,10 @@ If, accidentally, you stopped the application you can run it again using profile
 
 ```sh
 ./mvnw compile quarkus:dev
+
+or
+
+quarkus dev
 ```
 
 As we have done before, from another terminal run:
@@ -648,9 +616,13 @@ You can easily generate en OpenAPI compliant description of your API and at addi
 
 ```sh
 ./mvnw quarkus:add-extension -Dextensions="quarkus-smallrye-openapi"
+
+or
+
+quarkus ext add quarkus-smallrye-openapi
 ```
 
-Try opening this url http://localhost:8080/swagger-ui with a browser you should see something like:
+Try opening this url http://localhost:8080/q/swagger-ui/ with a browser you should see something like:
 
 ![Swagger UI](./docs/images/swagger-ui.png)
 
@@ -676,12 +648,16 @@ Health checks is one of those things that if recommendable in general is a must 
 
 ```sh
 ./mvnw quarkus:add-extension -Dextension="smallrye-health"
+
+or
+
+quarkus ext add smallrye-health
 ```
 
 Make sure your application is running in `dev` mode, then test the `/health` endpoint like this:
 
 ```sh
-curl -L http://localhost:8080/health
+curl -L http://localhost:8080/q/health
 
 {
     "status": "UP",
@@ -704,6 +680,10 @@ You can use dynamic templates using the [Qute Templating Engine extension](https
 
 ```sh
 ./mvnw quarkus:add-extension -Dextension="resteasy-qute,vertx-web"
+
+or
+
+quarkus ext add resteasy-qute vertx-web
 ```
 
 We need a couple of classes to make this work, first a new resource that should serve our template if `/index.html` is requested.
@@ -951,6 +931,10 @@ First of all let's add the extension to deploy to OpenShift.
 
 ```sh
 ./mvnw quarkus:add-extension -Dextension="openshift"
+
+or
+
+quarkus ext add openshift
 ```
 
 Add this couple of properties to `application.properties` so that we trust on the CA cert and set the namespace where we want to deploy our application.
@@ -1068,6 +1052,9 @@ Let's deploy the result.
 
 ```sh
 ./mvnw clean package -Dquarkus.kubernetes.deploy=true -DskipTests
+
+
+
 ```
 
 Or
@@ -1129,6 +1116,15 @@ Time to deploy using Knative.
 
 ```sh
 ./mvnw clean package -DskipTests
+
+or
+
+quarkus build --no-tests
+```
+
+Then
+
+```
 kubectl apply -f target/kubernetes/knative.yml
 ```
 
