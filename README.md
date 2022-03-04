@@ -1037,7 +1037,7 @@ So the new revision is generated and run and the next command should return the 
 curl -ks $(oc get ksvc/atomic-fruit-service-kn -o jsonpath='{.status.url}')/fruit/All
 ```
 
-# ANNEX: Automatic builds
+# ANNEX 1: Automatic builds
 
 ## Automatic build for JVM mode using `docker`
 
