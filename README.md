@@ -672,6 +672,431 @@ curl -L http://localhost:8080/q/health
 
 Ctrl+C
 
+# Different deployment techniques
+
+## Deploying to OpenShift
+
+First of all let's add the extension to deploy to OpenShift.
+
+```sh
+./mvnw quarkus:add-extension -Dextension="openshift"
+
+or
+
+quarkus ext add openshift
+```
+
+Add this couple of properties to `application.properties` so that we trust on the CA cert and set the namespace where we want to deploy our application.
+
+```properties
+# Kubernetes Client
+quarkus.kubernetes-client.trust-certs = true
+quarkus.kubernetes-client.namespace = ${PROJECT_NAME:atomic-fruit}
+
+# Only generate OpenShift descriptors
+quarkus.kubernetes.deployment-target = openshift
+
+# Expose the service when deployed
+quarkus.openshift.route.expose = true
+```
+
+Let's add a some additional labels `part-of` and `name`, and a custom label:
+
+```properties
+# Recommended labels and a custom label for kubernetes and openshift
+quarkus.openshift.part-of=fruits-app
+quarkus.openshift.name=atomic-fruit-service
+quarkus.openshift.labels.department=fruity-dept
+```
+
+Regarding annotations, out of the box, the generated resources will be annotated with version control related information that can be used either by tooling, or by the user for troubleshooting purposes.
+
+```yaml
+annotations:
+  app.quarkus.io/vcs-url: "<some url>"
+  app.quarkus.io/commit-id: "<some git SHA>"
+```
+
+Let's add a custom annotation:
+
+```properties
+# Custom annotations
+quarkus.openshift.annotations."app.openshift.io/connects-to"=postgresql-db
+quarkus.openshift.annotations.foo=bar
+quarkus.openshift.annotations."app.quarkus/id"=42
+```
+
+So far we haven't prepared the production profile, for instance we have no secret to keep the database credentials. Let's do something about it. Let's create a secret locally first.
+
+> NOTE: `openshift` extension takes the file we're generating and merge it with the one generated 
+
+```sh
+mkdir -p ./src/main/kubernetes
+cat <<EOF > ./src/main/kubernetes/openshift.yml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fruits-database-secret
+stringData:
+  DB_USER: luke
+  DB_PASSWORD: secret
+  DB_NAME: FRUITSDB
+  DB_HOST: postgresql-db
+EOF
+```
+
+Now let's add the environment variables we need to connect to the database:
+
+```properties
+# Environment variables
+quarkus.openshift.env.secrets = fruits-database-secret
+
+#quarkus.openshift.env.mapping.db-user.from-secret=fruits-database-secret
+#quarkus.openshift.env.mapping.db-user.with-key=user
+#quarkus.openshift.env.mapping.db-password.from-secret=fruits-database-secret
+#quarkus.openshift.env.mapping.db-password.with-key=password
+```
+Finally, now that we have linked the secret to the deployment environment... why not leverage that in the datasource configuration. Please substitute the datasource related properties with this.
+
+```properties
+#################################
+## BEGIN: Data Base related properties
+%prod.quarkus.datasource.jdbc.url = jdbc:postgresql://${DB_HOST}:5432/${DB_NAME}
+%prod.quarkus.datasource.db-kind = postgresql
+%prod.quarkus.datasource.username = ${DB_USER}
+%prod.quarkus.datasource.password = ${DB_PASSWORD}
+%prod.db.type = PostgreSQL
+
+%dev.quarkus.datasource.jdbc.url = jdbc:h2:mem:myDB
+%dev.quarkus.datasource.db-kind=h2
+%dev.quarkus.datasource.username = username-default
+%dev.db.type = H2
+
+%test.quarkus.datasource.jdbc.url = jdbc:h2:mem:myDB
+%test.quarkus.datasource.db-kind=h2
+%test.quarkus.datasource.username = username-default
+%test.db.type = H2
+
+## drop and create the database at startup (use `update` to only update the schema)
+%prod.quarkus.hibernate-orm.database.generation = create
+quarkus.hibernate-orm.database.generation = drop-and-create
+quarkus.hibernate-orm.sql-load-script = import.sql
+## show sql statements in log
+quarkus.hibernate-orm.log.sql = true
+
+## END: Data Base related properties
+#################################
+```
+
+Let's package our application and have a look to the descriptors generated.
+
+```
+./mvnw clean package
+```
+
+Go to [`./target/kubernetes/openshift.yml`](./target/kubernetes/openshift.yml) there you'll find: Service and Deployment...
+
+Let's deploy the result.
+
+```sh
+./mvnw clean package -Dquarkus.kubernetes.deploy=true -DskipTests
+```
+
+Or
+
+```sh
+$ kubectl apply -n ${PROJECT_NAME} -f target/kubernetes/openshift.yml
+```
+
+Let's inspect the resources created.
+
+```sh
+$ oc get dc -n ${PROJECT_NAME}
+NAME                   REVISION   DESIRED   CURRENT   TRIGGERED BY
+atomic-fruit-service   3          1         1         image(atomic-fruit-service:1.0-SNAPSHOT)
+```
+
+Now we can test that everything works properly.
+
+```sh
+curl http://$(oc get route atomic-fruit-service -o jsonpath='{.spec.host}')/fruit
+```
+
+What about native in this case? Easy, just add `-Dquarkus.native.container-build=true -Pnative`.
+
+```sh
+./mvnw clean package -Dquarkus.kubernetes.deploy=true -DskipTests -Dquarkus.native.container-build=true -Pnative
+```
+
+# Deploy to OpenShift as a Knative service
+
+Let's add `knative` a new target platform.
+
+```properties
+# Generate OpenShift and Knative descriptors
+quarkus.kubernetes.deployment-target=openshift,knative
+```
+
+And these properties to tune the Knative deployment.
+
+> **WARNING:** If you have changed the by default value for PROJECT_NAME change this line below accordingly!
+
+```properties
+#################################
+## BEGIN: Knative related properties
+quarkus.container-image.registry=image-registry.openshift-image-registry.svc:5000
+quarkus.container-image.group=${PROJECT_NAME:atomic-fruit}
+quarkus.container-image.tag=1.0-SNAPSHOT
+quarkus.knative.name=atomic-fruit-service-kn
+quarkus.knative.version=1.0
+quarkus.knative.part-of=fruits-app
+quarkus.knative.annotations."app.openshift.io/connects-to"=postgresql-db
+quarkus.knative.labels."app.openshift.io/runtime"=quarkus
+quarkus.knative.env.secrets = fruits-database-secret
+## END: Knative related properties
+#################################
+```
+
+Time to deploy using Knative.
+
+```sh
+quarkus build --no-tests
+```
+or
+
+```sh
+./mvnw clean package -DskipTests
+```
+
+Then apply the auto-generated descriptor for Knative.
+
+```sh
+kubectl apply -f target/kubernetes/knative.yml
+```
+
+Open the OpenShift web console and, using the Developer profile, open the topology view. You should see something like.
+
+
+TODO: image
+
+Let's test our new service.
+
+```sh
+oc get ksvc/atomic-fruit-service-kn
+```
+
+You should see something like.
+
+```sh
+NAME                      URL                                                                                            LATESTCREATED                   LATESTREADY                     READY   REASON
+atomic-fruit-service-kn   https://atomic-fruit-service-kn-atomic-fruit.apps.cluster-7jww7.7jww7.sandbox292.opentlc.com   atomic-fruit-service-kn-00002   atomic-fruit-service-kn-00002   True    
+```
+
+Let's curl that url.
+
+```sh
+curl -ks $(oc get ksvc/atomic-fruit-service-kn -o jsonpath='{.status.url}')/fruit
+```
+
+You should get the usual fruits... but the first time it'll take longer becuase it has to scale up from zero pods!
+
+## Add a CloudEvent handler to test the Knative Eventing engine
+
+[CloudEvents](https://cloudevents.io/) CloudEvents is a specification for describing event data in a common way and it's been adopted by Knative to trigger workloads. Let's adapt our application to receive an event and create a new fruit with it.
+
+Create this file here `$PROJECT_HOME/src/main/java/com/redhat/atomic/fruit/CloudEventResource.java` with the next content.
+
+```java
+package com.redhat.atomic.fruit;
+
+import java.net.URI;
+
+import javax.transaction.Transactional;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.HeaderParam;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
+
+import org.jboss.logging.Logger;
+
+@Path("/")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class CloudEventResource {
+    Logger logger = Logger.getLogger(CloudEventResource.class);
+
+    @POST
+    @Path("/")
+    public Response processCloudEvent(
+        @HeaderParam("ce-id") String id,
+        @HeaderParam("ce-type") String type,
+        @HeaderParam("ce-source") String source,
+        @HeaderParam("ce-specversion") String specversion,
+        @HeaderParam("ce-user") String user,
+        @HeaderParam("content-type") String contentType,
+        @HeaderParam("content-length") String contentLength,
+        Fruit fruit) {
+        logger.info("ce-id=" + id);
+        logger.info("ce-type=" + type);
+        logger.info("ce-source=" + source);
+        logger.info("ce-specversion=" + specversion);
+    
+        logger.info("ce-user=" +user);
+        logger.info("content-type=" + contentType);
+        logger.info("content-length=" + contentLength);
+        
+        return saveFruit(fruit);
+    }
+
+    @Transactional
+    public Response saveFruit(Fruit fruit) {
+        // since the FruitEntity is a panache entity
+        // persist is available by default
+        fruit.persist();
+        final URI createdUri = UriBuilder.fromResource(CloudEventResource.class)
+                        .path(Long.toString(fruit.id))
+                        .build();
+        return Response.created(createdUri).build();
+    }
+
+}
+```
+
+Ok, let's test the cloud events handler code. Run `quarkus dev` or `e` unless it was already running. Then run the next command that POSTs a CloudEvent containing a `Fruit` object to our application where `CloudEventResource` will take care of the event and create a new fruit in the database.
+
+```sh
+curl -v http://localhost:8080/  \
+  -H "Ce-specversion: 1.0" \
+  -H "Ce-Id: 121212121212" \
+  -H "Ce-Type: fruit-in-event" \
+  -H "Ce-Source: fruits-market" \
+  -H "Ce-User: user1" \
+  -H 'Content-Type: application/json' \
+  -d '{ "name": "Kiwi", "season" : "All" }'
+```
+
+Now if you run the next command this new fruit should exits.
+
+```sh
+curl http://localhost:8080/fruit/All
+```
+well, so far the code should be working properly, if that is the case, go ahead and deploy the new version.
+
+```sh
+quarkus build --no-tests
+kubectl apply -f target/kubernetes/knative.yml
+```
+
+In order for our Knative service to be triggered we need to create a Knative message broker `Broker` and define a `Trigger` that connects the broker with our application.
+
+Run the next command to create a broker, you can also do it from the webconsole as in the next image. In *Topology* right click any where and select 
+
+IMAGE
+
+Command to create the default broker.
+
+```sh
+kn broker create default --namespace ${PROJECT_NAME}
+```
+
+Expected output.
+
+```sh
+Broker 'default' successfully created in namespace 'atomic-fruit'.
+```
+
+Finally let's create a trigger that links the broker just created with our Knative service named: `atomic-fruit-service-kn`.
+
+```sh
+kn trigger create fruit-in --broker default --filter type=fruit-in-event,source=fruits-market --sink ksvc:atomic-fruit-service-kn
+```
+
+Let's test the broker and of course the cloud event handler.
+
+```sh
+BROKER_URL=$(oc get broker/default -n ${PROJECT_NAME} -o jsonpath='{.status.address.url}')
+oc delete pod/curl-default ; kubectl run curl-default --image=radial/busyboxplus:curl -it --restart=Never -- \
+  curl -v $BROKER_URL \
+    -H "Ce-specversion: 1.0" \
+    -H "Ce-Id: 121212121212" \
+    -H "Ce-Type: fruit-in-event" \
+    -H "Ce-Source: fruits-market" \
+    -H "Ce-User: user1" -H 'Content-Type: application/json' -d '{ "name": "Kiwi", "season" : "All" }'
+```
+
+You should receive a 202 meaning the message has been accepted.
+
+So the new revision is generated and run and the next command should return the new fruit created. 
+
+```sh
+curl -ks $(oc get ksvc/atomic-fruit-service-kn -o jsonpath='{.status.url}')/fruit/All
+```
+
+# ANNEX: Automatic builds
+
+## Automatic build for JVM mode using `docker`
+
+With automatic builds we have to set `registry` and `group` to tag the image for pushing to the registry. Add these properties to the `application.properties` files or add them using `-D`.
+
+```properties
+# OCI Image
+quarkus.container-image.registry=<registry>
+quarkus.container-image.group=<registry_user>
+```
+
+> **NOTE:** Extentions for building images [here](https://quarkus.io/guides/container-image)
+
+> **WARNING:** For now you cannot use `podman` in this case... :-( [this](https://github.com/quarkusio/quarkus/blob/master/extensions/container-image/container-image-docker/deployment/src/main/java/io/quarkus/container/image/docker/deployment/DockerProcessor.java) is the culprit.
+
+```sh
+./mvnw quarkus:add-extension -Dextensions="container-image-docker"
+./mvnw package -Dquarkus.native.container-build=true -Dquarkus.container-image.build=true
+```
+
+Run the image created.
+
+```sh
+docker run -i --rm -p 8080:8080 <registry>/<registry_user>/atomic-fruit-service:1.0-SNAPSHOT
+```
+
+Test from another terminal or a browser, you should receive a `hello` string.
+
+```sh
+curl http://localhost:8080/fruit
+```
+
+Ctrl+C to stop.
+
+## Automatic build for Native mode using `docker`
+
+> **NOTE:** Extentions for building images [here](https://quarkus.io/guides/container-image). 
+
+> **WARNING:** For now you cannot use `podman` in this case... :-( [this](https://github.com/quarkusio/quarkus/blob/master/extensions/container-image/container-image-docker/deployment/src/main/java/io/quarkus/container/image/docker/deployment/DockerProcessor.java) is the culprit.
+
+```
+./mvnw quarkus:add-extension -Dextensions="container-image-docker"
+./mvnw package -Dquarkus.native.container-build=true -Dquarkus.container-image.build=true -Pnative
+```
+
+Run the image created.
+
+```sh
+docker run -i --rm -p 8080:8080 <registry>/<registry_user>/atomic-fruit-service:1.0-SNAPSHOT
+```
+
+Test from another terminal or a browser, you should receive a `hello` string.
+
+```sh
+curl http://localhost:8080/fruit
+```
+
+Ctrl+C to stop.
+
 ## [OPTIONAL] Adding a simple UI using a template
 
 You can use dynamic templates using the [Qute Templating Engine extension](https://quarkus.io/guides/qute).
@@ -922,268 +1347,3 @@ Let's give it a try, shall we? As usual run in `dev` mode and then open a browse
 ```sh
 ./mvnw compile quarkus:dev
 ```
-
-# Different deployment techniques
-
-## Deploying to OpenShift
-
-First of all let's add the extension to deploy to OpenShift.
-
-```sh
-./mvnw quarkus:add-extension -Dextension="openshift"
-
-or
-
-quarkus ext add openshift
-```
-
-Add this couple of properties to `application.properties` so that we trust on the CA cert and set the namespace where we want to deploy our application.
-
-```properties
-# Kubernetes Client
-quarkus.kubernetes-client.trust-certs = true
-quarkus.kubernetes-client.namespace = ${PROJECT_NAME:atomic-fruit}
-
-# Only generate OpenShift descriptors
-quarkus.kubernetes.deployment-target = openshift
-
-# Expose the service when deployed
-quarkus.openshift.route.expose = true
-```
-
-Let's add a some additional labels `part-of` and `name`, and a custom label:
-
-```properties
-# Recommended labels and a custom label for kubernetes and openshift
-quarkus.openshift.part-of=fruits-app
-quarkus.openshift.name=atomic-fruit-service
-quarkus.openshift.labels.department=fruity-dept
-```
-
-Regarding annotations, out of the box, the generated resources will be annotated with version control related information that can be used either by tooling, or by the user for troubleshooting purposes.
-
-```yaml
-annotations:
-  app.quarkus.io/vcs-url: "<some url>"
-  app.quarkus.io/commit-id: "<some git SHA>"
-```
-
-Let's add a custom annotation:
-
-```properties
-# Custom annotations
-quarkus.openshift.annotations."app.openshift.io/connects-to"=postgresql-db
-quarkus.openshift.annotations.foo=bar
-quarkus.openshift.annotations."app.quarkus/id"=42
-```
-
-So far we haven't prepared the production profile, for instance we have no secret to keep the database credentials. Let's do something about it. Let's create a secret locally first.
-
-> NOTE: `openshift` extension takes the file we're generating and merge it with the one generated 
-
-```sh
-mkdir -p ./src/main/kubernetes
-cat <<EOF > ./src/main/kubernetes/openshift.yml
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: fruits-database-secret
-stringData:
-  DB_USER: luke
-  DB_PASSWORD: secret
-  DB_NAME: FRUITSDB
-  DB_HOST: postgresql-db
-EOF
-```
-
-Now let's add the environment variables we need to connect to the database:
-
-```properties
-# Environment variables
-quarkus.openshift.env.secrets = fruits-database-secret
-
-#quarkus.openshift.env.mapping.db-user.from-secret=fruits-database-secret
-#quarkus.openshift.env.mapping.db-user.with-key=user
-#quarkus.openshift.env.mapping.db-password.from-secret=fruits-database-secret
-#quarkus.openshift.env.mapping.db-password.with-key=password
-```
-Finally, now that we have linked the secret to the deployment environment... why not leverage that in the datasource configuration. Please substitute the datasource related properties with this.
-
-```properties
-#################################
-## BEGIN: Data Base related properties
-%prod.quarkus.datasource.jdbc.url = jdbc:postgresql://${DB_HOST}:5432/${DB_NAME}
-%prod.quarkus.datasource.db-kind = postgresql
-%prod.quarkus.datasource.username = ${DB_USER}
-%prod.quarkus.datasource.password = ${DB_PASSWORD}
-%prod.db.type = PostgreSQL
-
-%dev.quarkus.datasource.jdbc.url = jdbc:h2:mem:myDB
-%dev.quarkus.datasource.db-kind=h2
-%dev.quarkus.datasource.username = username-default
-%dev.db.type = H2
-
-%test.quarkus.datasource.jdbc.url = jdbc:h2:mem:myDB
-%test.quarkus.datasource.db-kind=h2
-%test.quarkus.datasource.username = username-default
-%test.db.type = H2
-
-## drop and create the database at startup (use `update` to only update the schema)
-%prod.quarkus.hibernate-orm.database.generation = create
-quarkus.hibernate-orm.database.generation = drop-and-create
-quarkus.hibernate-orm.sql-load-script = import.sql
-## show sql statements in log
-quarkus.hibernate-orm.log.sql = true
-
-## END: Data Base related properties
-#################################
-```
-
-Let's package our application and have a look to the descriptors generated.
-
-```
-./mvnw clean package
-```
-
-Go to [`./target/kubernetes/openshift.yml`](./target/kubernetes/openshift.yml) there you'll find: Service and Deployment...
-
-Let's deploy the result.
-
-```sh
-./mvnw clean package -Dquarkus.kubernetes.deploy=true -DskipTests
-
-
-
-```
-
-Or
-
-```sh
-$ kubectl apply -n ${PROJECT_NAME} -f target/kubernetes/openshift.yml
-```
-
-Let's inspect the resources created.
-
-```sh
-$ oc get dc -n ${PROJECT_NAME}
-NAME                   REVISION   DESIRED   CURRENT   TRIGGERED BY
-atomic-fruit-service   3          1         1         image(atomic-fruit-service:1.0-SNAPSHOT)
-```
-
-Now we can test that everything works properly.
-
-```sh
-curl http://$(oc get route atomic-fruit-service -o jsonpath='{.spec.host}')/fruit
-```
-
-What about native in this case? Easy, just add `-Dquarkus.native.container-build=true -Pnative`.
-
-```sh
-./mvnw clean package -Dquarkus.kubernetes.deploy=true -DskipTests -Dquarkus.native.container-build=true -Pnative
-```
-
-# Deploy to OpenShift as a Knative service
-
-Let's add a new target platform...
-
-```properties
-# Generate OpenShift and Knative descriptors
-quarkus.kubernetes.deployment-target=openshift,knative
-```
-
-And this properties to tune the Knative deployment.
-
-> **WARNING:** If you have changed the by default value for PROJECT_NAME change this line below accordingly!
-
-```properties
-#################################
-## BEGIN: Knative related properties
-quarkus.container-image.registry=image-registry.openshift-image-registry.svc:5000
-quarkus.container-image.group=${PROJECT_NAME:atomic-fruit}
-quarkus.container-image.tag=1.0-SNAPSHOT
-quarkus.knative.name=atomic-fruit-service-kn
-quarkus.knative.version=1.0
-quarkus.knative.part-of=fruits-app
-quarkus.knative.annotations."app.openshift.io/connects-to"=postgresql-db
-quarkus.knative.labels."app.openshift.io/runtime"=quarkus
-quarkus.knative.env.secrets = fruits-database-secret
-## END: Knative related properties
-#################################
-```
-
-Time to deploy using Knative.
-
-```sh
-./mvnw clean package -DskipTests
-
-or
-
-quarkus build --no-tests
-```
-
-Then
-
-```
-kubectl apply -f target/kubernetes/knative.yml
-```
-
-# ANNEX: Automatic builds
-
-## Automatic build for JVM mode using `docker`
-
-With automatic builds we have to set `registry` and `group` to tag the image for pushing to the registry. Add these properties to the `application.properties` files or add them using `-D`.
-
-```properties
-# OCI Image
-quarkus.container-image.registry=<registry>
-quarkus.container-image.group=<registry_user>
-```
-
-> **NOTE:** Extentions for building images [here](https://quarkus.io/guides/container-image)
-
-> **WARNING:** For now you cannot use `podman` in this case... :-( [this](https://github.com/quarkusio/quarkus/blob/master/extensions/container-image/container-image-docker/deployment/src/main/java/io/quarkus/container/image/docker/deployment/DockerProcessor.java) is the culprit.
-
-```sh
-./mvnw quarkus:add-extension -Dextensions="container-image-docker"
-./mvnw package -Dquarkus.native.container-build=true -Dquarkus.container-image.build=true
-```
-
-Run the image created.
-
-```sh
-docker run -i --rm -p 8080:8080 <registry>/<registry_user>/atomic-fruit-service:1.0-SNAPSHOT
-```
-
-Test from another terminal or a browser, you should receive a `hello` string.
-
-```sh
-curl http://localhost:8080/fruit
-```
-
-Ctrl+C to stop.
-
-## Automatic build for Native mode using `docker`
-
-> **NOTE:** Extentions for building images [here](https://quarkus.io/guides/container-image). 
-
-> **WARNING:** For now you cannot use `podman` in this case... :-( [this](https://github.com/quarkusio/quarkus/blob/master/extensions/container-image/container-image-docker/deployment/src/main/java/io/quarkus/container/image/docker/deployment/DockerProcessor.java) is the culprit.
-
-```
-./mvnw quarkus:add-extension -Dextensions="container-image-docker"
-./mvnw package -Dquarkus.native.container-build=true -Dquarkus.container-image.build=true -Pnative
-```
-
-Run the image created.
-
-```sh
-docker run -i --rm -p 8080:8080 <registry>/<registry_user>/atomic-fruit-service:1.0-SNAPSHOT
-```
-
-Test from another terminal or a browser, you should receive a `hello` string.
-
-```sh
-curl http://localhost:8080/fruit
-```
-
-Ctrl+C to stop.
