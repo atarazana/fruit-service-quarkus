@@ -4,7 +4,7 @@ kind: Secret
 metadata:
   name: fruits-database-secret
 stringData:
-  DB_USER: luke
-  DB_PASSWORD: secret
-  DB_NAME: FRUITSDB
-  DB_HOST: postgresql-db
+  database-user: luke
+  database-pasword: secret
+  database-name: FRUITSDB
+  database-host: postgresql-db

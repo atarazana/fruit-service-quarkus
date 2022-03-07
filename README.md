@@ -749,10 +749,10 @@ kind: Secret
 metadata:
   name: fruits-database-secret
 stringData:
-  DB_USER: luke
-  DB_PASSWORD: secret
-  DB_NAME: FRUITSDB
-  DB_HOST: postgresql-db
+  database-name: luke
+  database-pasword: secret
+  database-name: FRUITSDB
+  database-host: postgresql-db
 EOF
 ```
 
@@ -772,10 +772,10 @@ Finally, now that we have linked the secret to the deployment environment... why
 ```properties
 #################################
 ## BEGIN: Data Base related properties
-%prod.quarkus.datasource.jdbc.url = jdbc:postgresql://${DB_HOST}:5432/${DB_NAME}
+%prod.quarkus.datasource.jdbc.url = jdbc:postgresql://${database-host}:5432/${database-name}
 %prod.quarkus.datasource.db-kind = postgresql
-%prod.quarkus.datasource.username = ${DB_USER}
-%prod.quarkus.datasource.password = ${DB_PASSWORD}
+%prod.quarkus.datasource.username = ${database-name}
+%prod.quarkus.datasource.password = ${database-pasword}
 %prod.db.type = PostgreSQL
 
 %dev.quarkus.datasource.jdbc.url = jdbc:h2:mem:myDB
@@ -810,7 +810,7 @@ Go to [`./target/kubernetes/openshift.yml`](./target/kubernetes/openshift.yml) t
 Let's deploy the result.
 
 ```sh
-./mvnw clean package -Dquarkus.kubernetes.deploy=true -DskipTests
+quarkus build --no-tests -Dquarkus.kubernetes.deploy=true
 ```
 
 Or
@@ -836,7 +836,7 @@ curl http://$(oc get route atomic-fruit-service -o jsonpath='{.spec.host}')/frui
 What about native in this case? Easy, just add `-Dquarkus.native.container-build=true -Pnative`.
 
 ```sh
-./mvnw clean package -Dquarkus.kubernetes.deploy=true -DskipTests -Dquarkus.native.container-build=true -Pnative
+quarkus build --native --no-tests -Dquarkus.kubernetes.deploy=true -Dquarkus.native.container-build=true
 ```
 
 # Deploy to OpenShift as a Knative service

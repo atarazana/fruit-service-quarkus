@@ -19,10 +19,10 @@ metadata:
     group: com.redhat.atomic.fruit
   name: fruit-service-postgresql-db
 stringData:
-  DB_USER: luke
-  DB_PASSWORD: secret
-  DB_NAME: FRUITSDB
-  DB_HOST: postgresql-db
+  database-name: luke
+  database-pasword: secret
+  database-name: FRUITSDB
+  database-host: postgresql-db
 ---
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
@@ -55,7 +55,7 @@ spec:
     - name: DB_SECRET_NAME
       type: string
       default: fruit-service-postgresql-db
-    - name: DB_HOST
+    - name: database-host
       type: string
       default: postgresql-db
     - name: REVISION_NAME
@@ -104,7 +104,7 @@ spec:
             - '--env'
             - 'QUARKUS_PROFILE=$(params.QUARKUS_PROFILE)'
             - '--env'
-            - 'DB_HOST=$(params.DB_HOST)'
+            - 'database-host=$(params.database-host)'
             - '--env-from'
             - 'secret:$(params.DB_SECRET_NAME)'
             - '--revision-name'
