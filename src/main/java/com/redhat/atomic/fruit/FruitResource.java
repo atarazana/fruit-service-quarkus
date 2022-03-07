@@ -11,70 +11,31 @@ import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-@Path("/")
+@Path("/fruit")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class FruitResource {
     Logger logger = Logger.getLogger(FruitResource.class);
-
-    @ConfigProperty(name = "hello.message")
-    String message;
     
     @GET
-    @Path("fruit/hello")
-    @Produces(MediaType.TEXT_PLAIN)
-    public String hello() {
-        logger.debug("Hello method is called with message: " + this.message); // logging & custom property
-        return message; // custom property
-    }
-    
-    @GET
-    @Path("fruit")
     public List<Fruit> allFruits() {
         return Fruit.listAll(); 
     }
 
     @GET
-    @Path("fruit/{season}")
+    @Path("{season}")
     public List<Fruit> fruitsBySeason(@PathParam("season") String season) {
         return Fruit.getAllFruitsForSeason(season);
     }
 
     @POST
-    @Path("/")
-    public Response processCloudEvent(
-        @HeaderParam("ce-id") String id,
-        @HeaderParam("ce-type") String type,
-        @HeaderParam("ce-source") String source,
-        @HeaderParam("ce-specversion") String specversion,
-        @HeaderParam("ce-user") String user,
-        @HeaderParam("content-type") String contentType,
-        @HeaderParam("content-length") String contentLength,
-        Fruit fruit) {
-        
-        System.out.println("ce-id=" + id);
-        System.out.println("ce-type=" + type);
-        System.out.println("ce-source=" + source);
-        System.out.println("ce-specversion=" + specversion);
-    
-        System.out.println("ce-user=" +user);
-        System.out.println("content-type=" + contentType);
-        System.out.println("content-length=" + contentLength);
-        
-        return saveFruit(fruit);
-    }
-
-    @POST
-    @Path("fruit")
     @Transactional
     public Response saveFruit(Fruit fruit) {
         // since the FruitEntity is a panache entity
@@ -87,7 +48,7 @@ public class FruitResource {
     }
 
     @PUT
-    @Path("fruit/{id}")
+    @Path("{id}")
     @Transactional
     public Response updateFruit(@PathParam("id") Long id, Fruit fruit) {
         logger.info(String.format("id: %s fruit: %s", id, fruit));
@@ -111,7 +72,7 @@ public class FruitResource {
     }
 
     @DELETE
-    @Path("fruit/{id}")
+    @Path("{id}")
     @Transactional
     public void deleteFruit(@PathParam("id") Long id) {
         // since the FruitEntity is a panache entity

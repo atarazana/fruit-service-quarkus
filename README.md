@@ -12,18 +12,28 @@ This is a sample Fruit service generated from a maven artifact that generates al
 
 ## Setting demo environment variables
 
-> *You can alternatively run:* `$ . ./env.sh`
-
 ```sh
 export PROJECT_NAME="atomic-fruit"
 export APP_NAME="fruits-app"
 
 export QUARKUS_VERSION="2.7.3.Final"
-
 export MANDREL_VERSION="22.0.0.2-Final"
+export KN_VERSION="0.26.0"
+export TKN_VERSION="0.22.0"
+
+f [[ "$OSTYPE" == "linux"* ]]; then __OSTYPE=linux ; fi
+if [[ "$OSTYPE" == "darwin"* ]]; then __OSTYPE=darwin ; fi
+export __OSTYPE
 
 mkdir -p ./bin
 export PATH=$(pwd)/bin:$PATH
+```
+
+## Download CLIs
+
+```sh
+curl -OL https://github.com/tektoncd/cli/releases/download/v0.22.0/tkn_0.22.0_Linux_x86_64.tar.gz
+tar xvzf tkn_0.22.0_Linux_x86_64.tar.gz
 ```
 
 ## Download Mandrel
