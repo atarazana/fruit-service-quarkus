@@ -1,6 +1,6 @@
 schemaVersion: 2.0.0
 metadata:
-  name: java-quarkus
+  generateName: fruit-service-quarkus-
   version: 1.1.0
   attributes:
     alpha.build-context: .
@@ -13,9 +13,11 @@ metadata:
   language: "java"
 projects:
   - name: fruit-service-quarkus
-    source:
-      location: 'https://github.com/atarazana/fruit-service-quarkus.git'
-      type: github
+    git:
+      remotes:
+        origin: "https://github.com/atarazana/fruit-service-quarkus.git'"
+      checkoutFrom:
+        revision: main
 components:
   - name: buildguidance
     attributes:
